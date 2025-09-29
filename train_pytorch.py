@@ -25,9 +25,14 @@ def main():
     # 数据和模型参数 (与原 train.py 保持一致)
     file_num = 1
     num_node = 64
-    model_type = "dg_cram"
+    # 论文中提到的三种模式
+    # model_type = "dg_cram"
+    # model_type = "ng_cram"
+    model_type = "sg_cram"
+
     window_size = 400
     step = 10
+    model_step = 0
 
     # 模型超参数
     kernel_height_1st = 64
@@ -39,7 +44,7 @@ def main():
 
     # 训练超参数
     learning_rate = 1e-5
-    training_epochs = 110
+    training_epochs = 120
     batch_size = 10
     dropout_prob = 0.5
     num_labels = 2
@@ -177,6 +182,28 @@ def main():
             print(
                 f"({time.asctime()}) Epoch: {epoch+1:03d} | 测试损失: {avg_test_loss:.4f} | 测试精度: {test_accuracy:.4f} (AUC无法计算)\n"
             )
+
+        # --- 6. 保存训练好的模型 ---
+        if (epoch + 1) % 20 == 0:
+            model_step += 1
+            print("训练完成，正在保存模型...")
+
+            # 确保保存模型的文件夹存在
+            import os
+
+            model_save_dir = "./saved_models"
+            if not os.path.exists(model_save_dir):
+                os.makedirs(model_save_dir)
+
+            # 定义模型文件的完整路径
+            model_save_path = os.path.join(
+                model_save_dir, f"{model_type}gcram_pytorch_model{model_step}.pth"
+            )
+
+            # 保存模型的状态字典（推荐方式，只保存权重）
+            torch.save(model.state_dict(), model_save_path)
+
+            print(f"模型已成功保存至: {model_save_path}")
 
 
 if __name__ == "__main__":

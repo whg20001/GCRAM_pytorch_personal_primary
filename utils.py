@@ -1,16 +1,12 @@
+import os
 import numpy as np
 import pandas as pd
 import scipy.sparse as sp
-from sklearn.metrics import (
-    classification_report,
-    roc_auc_score,
-    auc,
-    roc_curve,
-    f1_score,
-)
+from sklearn.metrics import classification_report, roc_auc_score, auc, roc_curve
 
 
 def classification_report_csv(report):
+    """将sklearn的分类报告转换为DataFrame。"""
     report_data = []
     lines = report.split("\n")
     for line in lines[2:-3]:
@@ -28,27 +24,24 @@ def classification_report_csv(report):
 
 
 def multiclass_roc_auc_score(y_true, y_score):
+    """计算多分类任务的ROC-AUC分数。"""
     assert y_true.shape == y_score.shape
-    fpr = dict()
-    tpr = dict()
-    roc_auc = dict()
+    fpr, tpr, roc_auc = dict(), dict(), dict()
     n_classes = y_true.shape[1]
-    # compute ROC curve and ROC area for each class
+    # 为每个类别计算ROC曲线和AUC
     for i in range(n_classes):
         fpr[i], tpr[i], _ = roc_curve(y_true[:, i], y_score[:, i])
         roc_auc[i] = auc(fpr[i], tpr[i])
-    # compute micro-average ROC curve and ROC area
+    # 计算 micro-average ROC 曲线和 AUC
     fpr["micro"], tpr["micro"], _ = roc_curve(y_true.ravel(), y_score.ravel())
     roc_auc["micro"] = auc(fpr["micro"], tpr["micro"])
 
-    # compute macro-average ROC curve and ROC area
-    # First aggregate all false probtive rates
+    # 计算 macro-average ROC 曲线和 AUC
     all_fpr = np.unique(np.concatenate([fpr[i] for i in range(n_classes)]))
-    # Then interpolate all ROC curves at this points
     mean_tpr = np.zeros_like(all_fpr)
     for i in range(n_classes):
+        # 使用 np.interp 替代已废弃的 scipy.interp
         mean_tpr += np.interp(all_fpr, fpr[i], tpr[i])
-    # Finally average it and compute AUC
     mean_tpr /= n_classes
     fpr["macro"] = all_fpr
     tpr["macro"] = mean_tpr
@@ -57,30 +50,35 @@ def multiclass_roc_auc_score(y_true, y_score):
 
 
 def windows(data, size, step):
+    """生成滑动窗口的起始和结束索引。"""
     start = 0
-    while (start + size) < data.shape[0]:
+    while (start + size) <= data.shape[0]:
         yield int(start), int(start + size)
         start += step
 
 
 def segment_signal_without_transition(data, window_size, step):
+    """对单个信号序列进行滑动窗口切分。"""
     segments = []
     for start, end in windows(data, window_size, step):
         if len(data[start:end]) == window_size:
-            segments = segments + [data[start:end]]
+            segments.append(data[start:end])
     return np.array(segments)
 
 
 def segment_dataset(X, window_size, step):
+    """对整个数据集进行滑动窗口切分，生成4维数组。"""
     win_x = []
     for i in range(X.shape[0]):
-        win_x = win_x + [segment_signal_without_transition(X[i], window_size, step)]
+        # 使用 append 将每个试验的窗口数组作为一个整体添加
+        # 这会保留试验的维度
+        win_x.append(segment_signal_without_transition(X[i], window_size, step))
     win_x = np.array(win_x)
     return win_x
 
 
 def normalize_adj(adj):
-    """Symmetrically normalize adjacency matrix."""
+    """对称归一化邻接矩阵。"""
     adj = sp.coo_matrix(adj)
     rowsum = np.array(adj.sum(1))
     d_inv_sqrt = np.power(rowsum, -0.5).flatten()
@@ -91,13 +89,16 @@ def normalize_adj(adj):
     )
 
 
-def get_adj(num_node, adj_type):
+def get_adj(num_node, adj_type, data_dir="./data"):
     """
-    channel seq: Fc5.,Fc3.,Fc1.,Fcz.,Fc2.,Fc4.,Fc6.,C5..,C3..,C1..,Cz..,C2..,C4..,C6..,Cp5.,Cp3.,Cp1.,Cpz.,Cp2.,Cp4.,Cp6.,Fp1.,Fpz.,Fp2.,Af7.,Af3.,Afz.,Af4.,Af8.,F7..,F5..,F3..,F1..,Fz..,F2..,F4..,F6..,F8..,Ft7.,Ft8.,T7..,T8..,T9..,T10.,Tp7.,Tp8.,P7..,P5..,P3..,P1..,Pz..,P2..,P4..,P6..,P8..,Po7.,Po3.,Poz.,Po4.,Po8.,O1..,Oz..,O2..,Iz..
-                                 0    1    2    3    4    5    6    7    8    9    10   11   12   13   14   15   16   17   18   19   20   21   22   23   24   25   26   27   28   29   30   31   32   33   34   35   36   37   38   39   40   41   42   43   44   45   46   47   48   49   50   51   52   53   54   55   56   57   58   59   60   61   62   63
+    根据图类型生成邻接矩阵。
+    此版本修复了路径问题和参数健壮性问题。
     """
+    adj_type = adj_type.strip().lower()  # 清洗输入参数
     self_link = [(i, i) for i in range(num_node)]
-    if adj_type == "ng":  # neighboring connections with allover
+    csv_path = os.path.join(data_dir, "EEG_distance_physionet.csv")
+
+    if adj_type == "ng":  # Neighboring connections
         neighbor_link = [
             (1, 2),
             (1, 31),
@@ -310,59 +311,49 @@ def get_adj(num_node, adj_type):
         ]
         neighbor_link = [(i - 1, j - 1) for (i, j) in neighbor_link]
         edge = self_link + neighbor_link
-        # edge = neighbor_link
-        # construct adjacency matrix
         A = np.zeros((num_node, num_node))
         for i, j in edge:
             A[i, j] = 1
             A[j, i] = 1
-        adj = normalize_adj(A)
 
-    elif adj_type == "dg":  # threshold distance optimal self
+    elif adj_type == "dg":  # Distance-based Graph
         A = np.zeros([num_node, num_node])
-        loc = pd.read_csv("./data/EEG_distance_physionet.csv", index_col=False)
-        x = np.array(loc["x(mm)"])
-        y = np.array(loc["y(mm)"])
-        z = np.array(loc["z(mm)"])
+        loc = pd.read_csv(csv_path, index_col=False)
+        x, y, z = np.array(loc["x(mm)"]), np.array(loc["y(mm)"]), np.array(loc["z(mm)"])
         for m in range(num_node):
             for n in range(num_node):
                 if m != n:
-                    A[m, n] = np.power(
-                        np.power((x[m] - x[n]), 2)
-                        + np.power((y[m] - y[n]), 2)
-                        + np.power((z[m] - z[n]), 2),
-                        -0.5,
+                    dist_sq = (
+                        (x[m] - x[n]) ** 2 + (y[m] - y[n]) ** 2 + (z[m] - z[n]) ** 2
                     )
-        x_loc = np.expand_dims(np.where(A < np.mean(A))[0], axis=1)
-        y_loc = np.expand_dims(np.where(A < np.mean(A))[1], axis=1)
-        loc = np.append(x_loc, y_loc, axis=1)
-        for i, j in loc:
-            A[i, j] = 0
+                    A[m, n] = dist_sq ** (-0.5)
+
+        mean_val = np.mean(A[A > 0])  # Calculate mean only from non-zero elements
+        A[A < mean_val] = 0
+
         for k in range(num_node):
             A[k, k] = np.mean(A[k])
-        adj = normalize_adj(A)
-    elif adj_type == "sg":
+
+    elif adj_type == "sg":  # Shortest-distance Graph
         A = np.zeros([num_node, num_node])
-        loc = pd.read_csv("./data/EEG_distance_physionet.csv", index_col=False)
-        x = np.array(loc["x(mm)"])
-        y = np.array(loc["y(mm)"])
-        z = np.array(loc["z(mm)"])
+        loc = pd.read_csv(csv_path, index_col=False)
+        x, y, z = np.array(loc["x(mm)"]), np.array(loc["y(mm)"]), np.array(loc["z(mm)"])
         for m in range(num_node):
             for n in range(num_node):
                 if m != n:
-                    A[m, n] = np.power(
-                        np.power((x[m] - x[n]), 2)
-                        + np.power((y[m] - y[n]), 2)
-                        + np.power((z[m] - z[n]), 2),
-                        -0.5,
+                    dist_sq = (
+                        (x[m] - x[n]) ** 2 + (y[m] - y[n]) ** 2 + (z[m] - z[n]) ** 2
                     )
-        x_loc = np.expand_dims(np.where(A < np.mean(A))[0], axis=1)
-        y_loc = np.expand_dims(np.where(A < np.mean(A))[1], axis=1)
-        loc = np.append(x_loc, y_loc, axis=1)
-        for i, j in loc:
-            A[i, j] = 0
-        for k in range(num_node):
-            A[k, k] = min(A[k])
-        adj = normalize_adj(A)
+                    A[m, n] = dist_sq ** (-0.5)
 
+        mean_val = np.mean(A[A > 0])
+        A[A < mean_val] = 0
+
+        for k in range(num_node):
+            A[k, k] = min(A[k][A[k] > 0]) if np.any(A[k] > 0) else 0
+
+    else:
+        raise ValueError(f"未知的图类型: '{adj_type}'. 有效选项是 'ng', 'dg', 'sg'。")
+
+    adj = normalize_adj(A)
     return adj

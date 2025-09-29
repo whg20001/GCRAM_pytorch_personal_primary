@@ -90,9 +90,10 @@ ch_names_64 = [
 # 3. 从完整的电极配置中，筛选出我们需要的64个通道及其对应的3D坐标
 #    get_positions()返回的是一个字典，键是通道名，值是坐标
 all_positions = full_montage.get_positions()["ch_pos"]
-# pprint.pprint(full_montage.get_positions())
-# print("________________________________")
-# pprint.pprint(all_positions)
+# 查看数据的基本内容
+pprint.pprint(full_montage.get_positions())
+print("________________________________")
+pprint.pprint(all_positions)
 positions_64_dict = {ch: all_positions[ch] for ch in ch_names_64 if ch in all_positions}
 
 # 检查是否成功找到了所有64个通道
