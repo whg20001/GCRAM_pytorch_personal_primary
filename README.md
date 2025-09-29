@@ -13,7 +13,7 @@
 
 4. 新的文件结构如下：
 
-    [![pVI4xHK.png](https://s21.ax1x.com/2025/09/27/pVI4xHK.png)](https://imgse.com/i/pVI4xHK)
+    [![pVoMVEj.png](https://s21.ax1x.com/2025/09/29/pVoMVEj.png)](https://imgse.com/i/pVoMVEj)
 
 5. 项目复现步骤及环境配置：
 
