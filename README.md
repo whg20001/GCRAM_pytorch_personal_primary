@@ -22,4 +22,5 @@
     - 第二步：通过create_electrode_csv.py文件创建电极帽的空间信息csv文件
     - 第三步：通过preprocess_raw_data.py文件创建基础的设置（读取所有109位被试的原始`.edf`数据文件和`.event`事件文件，提取出与“左/右拳运动想象”相关的脑电信号片段（这称为Epoching），然后按照论文的设定划分训练集和测试集，最后保存为单一的`.mat`文件。）
     - 第四步：运行train_pytorch.py文件进行训练
-    - 
+    - 第五步：使用evaluate_model.py进行模型的评估
+    - 第六步：使用predict.py进行模型的预测（实例）
